@@ -432,6 +432,14 @@ export type StyleExploreRunStatus =
   | "completed"
   | "cancelled";
 export type StyleExploreCandidateStatus = "pending" | "generating" | "done" | "failed" | "skipped";
+export type FixedArtist = { id: string; weight: number };
+export type StyleExplorePairing = {
+  fixed_artists: FixedArtist[];
+  pairing_mode: "random" | "sequential";
+  samples_per_artist: number;
+  max_artist_count: number;
+  seed_mode: "increment" | "fixed";
+};
 export type StyleExploreReviewLabel = "treasure" | "reject" | "special" | null;
 export type StyleExplorePreliminaryLabel = "treasure" | "reject" | "special" | null;
 

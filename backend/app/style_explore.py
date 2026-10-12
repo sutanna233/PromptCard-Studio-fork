@@ -22,6 +22,7 @@ from . import cards as cards_service
 from . import library as library_service
 from . import novelai as novelai_service
 from . import style_explore_algorithm
+from . import style_explore_pairing
 from . import terminal as terminal_log
 from .config import PROJECT_ROOT
 from .generation_timing import COOL_MAX, COOL_MIN, RETRY_WAIT_MAX, RETRY_WAIT_MIN, cool_down
@@ -602,6 +603,10 @@ def create_run(
         raise ValueError("目标生成数量需在 1~1000 之间")
     with _lock:
         pool = get_pool(pool_id)
+        options = style_explore_pairing.normalize_options(dict(algorithm or {}))
+        target_count = style_explore_pairing.round_count(pool["ids"], int(target_count), options)
+        if options["fixed_artists"]:
+            style_explore_pairing.partner_pool(pool["ids"], options)
         run_id = uuid.uuid4().hex[:12]
         now = _now()
         record = {
@@ -616,7 +621,7 @@ def create_run(
             "random_seed": None,
             "pool": {"id": pool["id"], "name": pool["name"], "ids": pool["ids"]},
             "prompt_snapshot": {"positive": positive or "", "negative": negative or "", "params": params or {}},
-            "algorithm": algorithm or {},
+            "algorithm": options,
             "rounds": [],
             "archived_at": None,
             "candidates": [],
@@ -681,9 +686,9 @@ def start_run(run_id: str) -> dict:
         _assert_batch_idle()
         if not novelai_service.is_configured():
             raise ValueError("尚未配置 NovelAI token，请先在「设置」中配置")
-        generation_coordinator.acquire("style_explore", run_id)
         if not record.get("candidates"):
             _create_basic_candidates(record)
+        generation_coordinator.acquire("style_explore", run_id)
         record["status"] = "running"
         record["status_reason"] = None
         _save_run(record)
@@ -894,7 +899,7 @@ def _validate_parent_snapshot(
         soft_balance_strength=float(raw_algorithm.get("soft_balance_strength", 0.0)),
     )
     max_artist_count = int(raw_algorithm.get("max_artist_count", 10))
-    style_explore_algorithm.generate_deep_candidates(
+    style_explore_pairing.generate_deep(
         [
             style_explore_algorithm.DeepParent.from_artist_string(
                 item["id"], item["artist_string"], item["preference"]
@@ -906,6 +911,7 @@ def _validate_parent_snapshot(
         config,
         random.Random(0),
         max_artist_count,
+        style_explore_pairing.normalize_options(raw_algorithm),
     )
 
 
@@ -1444,7 +1450,9 @@ def append_deep_round(
         if int(target_count) <= len(parents):
             raise ValueError("深度候选数量必须大于父本数，以保留变异与随机注入名额")
 
-        raw = {**dict(record.get("algorithm") or {}), **dict(algorithm or {})}
+        raw = style_explore_pairing.freeze_comparison_seed(
+            style_explore_pairing.normalize_options({**dict(record.get("algorithm") or {}), **dict(algorithm or {})}), params or {}
+        )
         config = style_explore_algorithm.WeightSamplingConfig(
             lower=float(raw.get("lower", 0.1)),
             upper=float(raw.get("upper", 2.0)),
@@ -1465,7 +1473,7 @@ def append_deep_round(
             "soft_balance_strength": config.soft_balance_strength,
             "max_artist_count": max_artist_count,
         }
-        generated = style_explore_algorithm.generate_deep_candidates(
+        generated = style_explore_pairing.generate_deep(
             [
                 style_explore_algorithm.DeepParent.from_artist_string(
                     item["id"], item["artist_string"], float(item.get("preference", 1.0))
@@ -1477,6 +1485,7 @@ def append_deep_round(
             config,
             random.Random(seed),
             max_artist_count,
+            raw,
         )
         rounds = record.setdefault("rounds", [])
         round_id = uuid.uuid4().hex[:12]
@@ -1827,7 +1836,8 @@ def _append_basic_round_to_record(
     """把一轮候选和每张候选的不可变生成快照一起写入任务记录。"""
     if record.get("phase") != "basic":
         raise ValueError("深度探索候选将在深度算法接入后创建")
-    raw = dict(algorithm or {})
+    raw = style_explore_pairing.freeze_comparison_seed(style_explore_pairing.normalize_options(dict(algorithm or {})), params)
+    target_count = style_explore_pairing.round_count(record["pool"]["ids"], target_count, raw)
     config = style_explore_algorithm.WeightSamplingConfig(
         lower=float(raw.get("lower", 0.1)),
         upper=float(raw.get("upper", 2.0)),
@@ -1866,8 +1876,8 @@ def _append_basic_round_to_record(
         "algorithm": normalized_algorithm,
         "candidate_ids": [],
     }
-    generated = style_explore_algorithm.generate_basic_candidates(
-        record["pool"]["ids"], min_artist_count, target_count, config, random.Random(seed), max_artist_count
+    generated = style_explore_pairing.generate_basic(
+        record["pool"]["ids"], min_artist_count, target_count, config, random.Random(seed), max_artist_count, raw
     )
     candidates = [
         {
@@ -1985,8 +1995,11 @@ def _worker_loop(run_id: str) -> None:
                     if part and part.strip()
                 )
                 params = dict(snapshot.get("params") or {})
-                base_seed = int(params.get("seed") or -1)
-                if base_seed >= 0:
+                base_seed = int(params.get("seed", -1))
+                candidate_algorithm = candidate.get("algorithm_snapshot") or {}
+                if candidate_algorithm.get("seed_mode") == "fixed":
+                    params["seed"] = int(candidate_algorithm["comparison_seed"])
+                elif base_seed >= 0:
                     index = next(i for i, item in enumerate(record["candidates"]) if item["id"] == candidate["id"])
                     params["seed"] = base_seed + index
                 else:

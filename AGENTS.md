@@ -8,3 +8,6 @@
 - 大文件、环境和构建均在 J 盘。前端使用 Node.js `D:\js\node.exe`、锁文件安装和 `npm run build`；后端测试优先使用已部署便携 Python `J:\ai\PromptCard-Studio\runtime\python\python.exe`。
 - 不消耗用户 NovelAI 点数进行验证：用 unittest/mock 检查真实生成调用收到的提示词、候选分布与 Card 内容；浏览器验证界面并停止在生成之前。
 - `backend/tests` 是现有 unittest 测试；前端 build 包含 TypeScript 检查。使用 browser-harness 验证实际浏览器界面。
+- 上游跟踪 frontend/dist，构建产物必须随前端源码更新提交，使源码包无需 Node.js 也能启动；不要忽略该目录的新资源。
+- 新搭配设置保存在各轮 algorithm/algorithm_snapshot；逐个模式完整覆盖池，固定项不计入搭配数量。最多搭配数可设 1，固定项与搭配项共不超过 30。
+- 同种子比较选项固化每轮 comparison_seed，包括 seed=0；旧任务继续沿用原有逐张递增或随机行为。

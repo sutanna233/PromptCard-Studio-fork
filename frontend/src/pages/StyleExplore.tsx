@@ -9,6 +9,7 @@ import { ReviewMode, type ReviewChoice } from "../components/gallery/ReviewMode"
 import { ConfirmDialog, Modal } from "../components/UI";
 import { StyleExploreParamsPanel } from "../components/StyleExploreParamsPanel";
 import { StyleExploreDeepExplorer } from "../components/style-explore/StyleExploreDeepExplorer";
+import { FixedArtistControls } from "../components/style-explore/FixedArtistControls";
 import { serializeSections } from "../lib";
 import { useStore } from "../store";
 import { useGenerateStore } from "../store/generate";
@@ -206,10 +207,10 @@ function SplitBetaPreview({ lower, upper, mode, leftDispersion, rightDispersion 
   </section>;
 }
 
-function WeightParameters({ targetCount, setTargetCount, minArtistCount, setMinArtistCount, maxArtistCount, lower, setLower, upper, setUpper, mode, setMode, leftDispersion, setLeftDispersion, rightDispersion, setRightDispersion, softBalanceStrength, setSoftBalanceStrength, setHelpEntry, onOpenAdvancedSettings }: { targetCount: number; setTargetCount: (value: number) => void; minArtistCount: number; setMinArtistCount: (value: number) => void; maxArtistCount: number; lower: number; setLower: (value: number) => void; upper: number; setUpper: (value: number) => void; mode: number; setMode: (value: number) => void; leftDispersion: number; setLeftDispersion: (value: number) => void; rightDispersion: number; setRightDispersion: (value: number) => void; softBalanceStrength: number; setSoftBalanceStrength: (value: number) => void; setHelpEntry: (entry: HelpEntry) => void; onOpenAdvancedSettings: () => void }) {
+function WeightParameters({ targetCount, setTargetCount, minArtistCount, setMinArtistCount, maxArtistCount, lower, setLower, upper, setUpper, mode, setMode, leftDispersion, setLeftDispersion, rightDispersion, setRightDispersion, softBalanceStrength, setSoftBalanceStrength, setHelpEntry, sequential }: { targetCount: number; setTargetCount: (value: number) => void; minArtistCount: number; setMinArtistCount: (value: number) => void; maxArtistCount: number; lower: number; setLower: (value: number) => void; upper: number; setUpper: (value: number) => void; mode: number; setMode: (value: number) => void; leftDispersion: number; setLeftDispersion: (value: number) => void; rightDispersion: number; setRightDispersion: (value: number) => void; softBalanceStrength: number; setSoftBalanceStrength: (value: number) => void; setHelpEntry: (entry: HelpEntry) => void; sequential: boolean }) {
   return <section className="glass rounded-2xl p-5"><div><h2 className="font-semibold">权重参数</h2><p className="mt-1 text-xs text-[var(--muted)]">控制 Artist String 的随机权重分布；下方图表会即时反映当前的 Split-Beta 参数。</p></div><div className="mt-4 grid gap-x-4 gap-y-5 sm:grid-cols-2 xl:grid-cols-4">
-    <ParameterControl label="目标图片数" help={{ title: "目标图片数", description: "本次基础探索要生成的候选图片数。数值越大，覆盖的 Artist String 组合越多，也会增加生成耗时和消耗。" }} value={targetCount} onChange={setTargetCount} min={1} max={1000} step={1} defaultValue={20} integer onOpenHelp={setHelpEntry} />
-    <ParameterControl label="最少抽取 ID 数目" help={{ title: "最少抽取 ID 数目", description: `每张候选图都会重新决定实际抽取数量，并从这个下限随机到当前上限 ${maxArtistCount}；若池子不足，则以池子大小为准。` }} value={minArtistCount} onChange={setMinArtistCount} min={1} max={maxArtistCount} step={1} defaultValue={2} integer onOpenHelp={setHelpEntry} advancedAction={{ label: "高级设置：调整最大抽取ID数目", onClick: onOpenAdvancedSettings }} />
+    {!sequential && <ParameterControl label="目标图片数" help={{ title: "目标图片数", description: "本次基础探索要生成的候选图片数。数值越大，覆盖的 Artist String 组合越多，也会增加生成耗时和消耗。" }} value={targetCount} onChange={setTargetCount} min={1} max={1000} step={1} defaultValue={20} integer onOpenHelp={setHelpEntry} />}
+    {!sequential && <ParameterControl label="最少搭配画师数" help={{ title: "最少搭配画师数", description: `每张候选从这个下限随机到上方设置的最多搭配数 ${maxArtistCount}，不含固定画师；若池子不足，则以池子大小为准。` }} value={minArtistCount} onChange={setMinArtistCount} min={1} max={maxArtistCount} step={1} defaultValue={2} integer onOpenHelp={setHelpEntry} />}
     <ParameterControl label="权重下界" help={{ title: "权重下界", description: "本轮随机权重不会低于这个值。它与上界共同限定可出现的权重范围，必须不大于众数。" }} value={lower} onChange={setLower} min={-3} max={3} step={0.1} defaultValue={0.1} onOpenHelp={setHelpEntry} />
     <ParameterControl label="权重上界" help={{ title: "权重上界", description: "本轮随机权重不会高于这个值。它与下界共同限定可出现的权重范围，必须不小于众数。" }} value={upper} onChange={setUpper} min={-3} max={3} step={0.1} defaultValue={2} onOpenHelp={setHelpEntry} />
     <ParameterControl label="众数" help={{ title: "众数", description: "Split-Beta 分布的中心。随机采样最倾向于靠近它，但不会保证每个画师 ID 都取该权重。众数必须落在上下界之间。" }} value={mode} onChange={setMode} min={Math.min(lower, upper)} max={Math.max(lower, upper)} step={0.1} defaultValue={0.8} onOpenHelp={setHelpEntry} />
@@ -222,7 +223,6 @@ function WeightParameters({ targetCount, setTargetCount, minArtistCount, setMinA
 export function StyleExplore() {
   const navigate = useNavigate();
   const addToast = useStore((s) => s.addToast);
-  const settings = useStore((s) => s.settings);
   const refreshCategories = useStore((s) => s.refreshCategories);
   const workspacePositive = useStore((s) => s.positive);
   const workspaceNegative = useStore((s) => s.negative);
@@ -236,6 +236,8 @@ export function StyleExplore() {
   const importWorkspaceSnapshot = useStyleExploreDraft((s) => s.importWorkspaceSnapshot);
   const lastSelectedRunId = useStyleExploreDraft((s) => s.lastSelectedRunId);
   const setLastSelectedRunId = useStyleExploreDraft((s) => s.setLastSelectedRunId);
+  const pairing = useStyleExploreDraft((s) => s.pairing);
+  const setPairing = useStyleExploreDraft((s) => s.setPairing);
   const fileRef = useRef<HTMLInputElement>(null);
   const [pools, setPools] = useState<StyleExplorePoolSummary[]>([]);
   const [runs, setRuns] = useState<StyleExploreRunSummary[]>([]);
@@ -252,7 +254,11 @@ export function StyleExplore() {
   const [targetCount, setTargetCount] = useState(20);
   const [taskName, setTaskName] = useState("");
   const [minArtistCount, setMinArtistCount] = useState(2);
-  const maxArtistCount = Math.max(5, Math.min(30, Math.round(settings?.style_explore_max_artist_count ?? 10)));
+  const maxArtistCount = Math.max(1, Math.min(30 - pairing.fixed_artists.length, Math.round(pairing.max_artist_count)));
+  const fixedIds = new Set(pairing.fixed_artists.map((artist) => artist.id.trim()));
+  const availablePartnerCount = (pool?.ids ?? []).filter((id) => !fixedIds.has(id)).length;
+  const sequential = pairing.pairing_mode === "sequential";
+  const effectiveTargetCount = sequential ? availablePartnerCount * pairing.samples_per_artist : targetCount;
   const [lower, setLower] = useState(0.1);
   const [upper, setUpper] = useState(2);
   const [mode, setMode] = useState(0.8);
@@ -284,7 +290,9 @@ export function StyleExplore() {
     const latestBasicRound = [...((next.rounds ?? []) as unknown as SnapshotRound[])].reverse().find((round) => round.phase === "basic");
     const source = latestBasicRound?.algorithm ?? next.algorithm ?? {};
     setTargetCount(Math.max(1, Math.min(1000, finiteNumber(latestBasicRound?.target_count ?? next.target_count, 20))));
-    const restoredMinArtistCount = Math.round(Math.max(1, Math.min(maxArtistCount, finiteNumber(source.min_artist_count ?? source.artist_count, 2))));
+    const restoredMaxArtistCount = Math.round(Math.max(1, Math.min(30, finiteNumber(source.max_artist_count, 10))));
+    const restoredMinArtistCount = Math.round(Math.max(1, Math.min(restoredMaxArtistCount, finiteNumber(source.min_artist_count ?? source.artist_count, 2))));
+    setPairing({ fixed_artists: Array.isArray(source.fixed_artists) ? source.fixed_artists as { id: string; weight: number }[] : [], pairing_mode: source.pairing_mode === "sequential" ? "sequential" : "random", samples_per_artist: Math.max(1, Math.min(20, finiteNumber(source.samples_per_artist, 1))), max_artist_count: restoredMaxArtistCount, seed_mode: source.seed_mode === "fixed" ? "fixed" : "increment" });
     setMinArtistCount(restoredMinArtistCount);
     setLower(Math.max(-3, Math.min(3, finiteNumber(source.lower, 0.1))));
     setUpper(Math.max(-3, Math.min(3, finiteNumber(source.upper, 2))));
@@ -292,7 +300,7 @@ export function StyleExplore() {
     setLeftDispersion(Math.max(0, Math.min(1, finiteNumber(source.left_dispersion, 0.4))));
     setRightDispersion(Math.max(0, Math.min(1, finiteNumber(source.right_dispersion, 0.4))));
     setSoftBalanceStrength(Math.max(0, Math.min(1, finiteNumber(source.soft_balance_strength, 0))));
-  }, [maxArtistCount]);
+  }, [setPairing]);
 
   const refresh = useCallback(async () => {
     const [nextPools, nextRuns] = await Promise.all([api.styleExplorePools(), api.styleExploreRuns(showArchived)]);
@@ -323,6 +331,7 @@ export function StyleExplore() {
   }, []);
   useEffect(() => { setEditRunName(run?.name ?? ""); }, [run?.id, run?.name]);
   useEffect(() => { setMinArtistCount((current) => Math.min(current, maxArtistCount)); }, [maxArtistCount]);
+  useEffect(() => { if (pairing.max_artist_count !== maxArtistCount) setPairing({ max_artist_count: maxArtistCount }); }, [maxArtistCount, pairing.max_artist_count, setPairing]);
   useEffect(() => {
     if (run?.status !== "running") return;
     const timer = window.setInterval(() => void loadRun(run.id).catch(() => {}), 1800);
@@ -395,9 +404,10 @@ export function StyleExplore() {
   });
   const createRun = () => void withBusy(async () => {
     if (!poolId) throw new Error("请先选择 ArtistPool");
+    if (!effectiveTargetCount || effectiveTargetCount > 1000) throw new Error("每轮图片数需在 1 到 1000 之间，请调整画师池或每位图片数");
     const created = await api.styleExploreCreateRun({
-      name: taskName, pool_id: poolId, target_count: targetCount, positive, negative, params: { ...params, vibes }, phase: "basic",
-      algorithm: { min_artist_count: minArtistCount, max_artist_count: maxArtistCount, lower, upper, mode, left_dispersion: leftDispersion, right_dispersion: rightDispersion, soft_balance_strength: softBalanceStrength },
+      name: taskName, pool_id: poolId, target_count: effectiveTargetCount, positive, negative, params: { ...params, vibes }, phase: "basic",
+      algorithm: currentAlgorithm(),
     });
     setTaskName(""); selectRun(created.id); setRun(created); setCreateRunDialogOpen(false); await refresh(); addToast("已创建基础探索任务；确认参数后即可开始生成");
   });
@@ -409,7 +419,8 @@ export function StyleExplore() {
   const rememberPatchedCandidate = useCallback((candidate: StyleExploreCandidate) => {
     locallyPatchedCandidates.current.set(candidate.id, candidate);
   }, []);
-  const currentRoundPayload = () => ({ target_count: targetCount, positive, negative, params: { ...params, vibes }, algorithm: { min_artist_count: minArtistCount, max_artist_count: maxArtistCount, lower, upper, mode, left_dispersion: leftDispersion, right_dispersion: rightDispersion, soft_balance_strength: softBalanceStrength } });
+  const currentAlgorithm = () => ({ ...pairing, fixed_artists: pairing.fixed_artists.map((artist) => ({ ...artist, id: artist.id.trim() })), min_artist_count: minArtistCount, max_artist_count: maxArtistCount, lower, upper, mode, left_dispersion: leftDispersion, right_dispersion: rightDispersion, soft_balance_strength: softBalanceStrength });
+  const currentRoundPayload = () => ({ target_count: targetCount, positive, negative, params: { ...params, vibes }, algorithm: currentAlgorithm() });
   const appendRound = () => void withBusy(async () => {
     if (!run) return;
     const next = await api.styleExploreAppendBasicRound(run.id, currentRoundPayload());
@@ -532,7 +543,8 @@ export function StyleExplore() {
         </section>
       </main>
     </div>
-      <WeightParameters targetCount={targetCount} setTargetCount={setTargetCount} minArtistCount={minArtistCount} setMinArtistCount={setMinArtistCount} maxArtistCount={maxArtistCount} lower={lower} setLower={setLower} upper={upper} setUpper={setUpper} mode={mode} setMode={setMode} leftDispersion={leftDispersion} setLeftDispersion={setLeftDispersion} rightDispersion={rightDispersion} setRightDispersion={setRightDispersion} softBalanceStrength={softBalanceStrength} setSoftBalanceStrength={setSoftBalanceStrength} setHelpEntry={setHelpEntry} onOpenAdvancedSettings={() => navigate("/settings", { state: { scrollTarget: "style-explore-max-artist-count" } })} />
+      <FixedArtistControls pairing={pairing} onChange={setPairing} availableCount={availablePartnerCount} minArtistCount={minArtistCount} positive={positive} />
+      <WeightParameters sequential={sequential} targetCount={targetCount} setTargetCount={setTargetCount} minArtistCount={minArtistCount} setMinArtistCount={setMinArtistCount} maxArtistCount={maxArtistCount} lower={lower} setLower={setLower} upper={upper} setUpper={setUpper} mode={mode} setMode={setMode} leftDispersion={leftDispersion} setLeftDispersion={setLeftDispersion} rightDispersion={rightDispersion} setRightDispersion={setRightDispersion} softBalanceStrength={softBalanceStrength} setSoftBalanceStrength={setSoftBalanceStrength} setHelpEntry={setHelpEntry} />
     {run && <section className="glass rounded-2xl p-5">
       <div className={`flex gap-3 ${candidateCollapsed ? "items-center" : "items-start"}`}><div><h2 className="font-semibold">本任务候选</h2>{!candidateCollapsed && <p className="mt-1 text-xs text-[var(--muted)]">这里仅用于预览和初步标记；心形与 Treasure / Special / Reject 会作为文字注释带入后续正式筛选，不会在此移动图片。</p>}</div>{candidateCollapsed ? <button className={`${ghostButtonClass} ml-auto w-32 shrink-0`} onClick={() => setCandidateCollapsed(false)}><ChevronDown size={15} />展开</button> : <div className="ml-auto flex shrink-0 gap-2"><button className={`${ghostButtonClass} w-32`} onClick={() => setCandidateCollapsed(true)} aria-label="顶部收起本任务候选"><ChevronUp size={15} />收起</button><button className={`${ghostButtonClass} w-32`} onClick={() => controlRun(run.status === "running" ? "pause" : "resume")} disabled={busy || !["running", "paused"].includes(run.status)}>{run.status === "paused" ? <Play size={15} /> : <Pause size={15} />}{run.status === "paused" ? "继续生成" : "暂停生成"}</button></div>}</div>
       {!candidateCollapsed && <><div className="mt-4 grid max-h-[680px] gap-3 overflow-auto sm:grid-cols-2 xl:grid-cols-3">{basicCandidates.map((candidate, index) => <ExploreCandidateCard key={candidate.id} runId={run.id} candidate={candidate} index={index} roundNumber={candidate.round_id ? basicRoundNumbers.get(candidate.round_id) : undefined} onPreview={setPreviewCandidateId} onPatched={rememberPatchedCandidate} onError={addToast} />)}{basicCandidates.length === 0 && <div className="rounded-xl border border-dashed border-[var(--border)] p-5 text-sm text-[var(--muted)]">创建任务后，候选会在开始生成时按当前算法参数固化。</div>}</div>
@@ -546,7 +558,7 @@ export function StyleExplore() {
         {openExploreItems.length > 0 ? <GalleryMasonry items={openExploreItems} selectionMode={exploreSelecting} selectedPaths={exploreSelectedIds} onToggleSelect={(item) => toggleExploreSelection(item.path)} onItemClick={(item) => setPreviewCandidateId(item.path)} getImageUrl={(item) => api.styleExploreCandidateImageUrl(run.id, item.path)} /> : <div className="rounded-xl border border-dashed border-[var(--border)] py-16 text-center text-sm text-[var(--muted)]">这个牌堆还没有图片。</div>}
       </div>}
     </section>}
-      {run && <StyleExploreDeepExplorer run={run} positive={positive} negative={negative} params={{ ...params, vibes }} algorithm={{ min_artist_count: minArtistCount, max_artist_count: maxArtistCount, lower, upper, mode, left_dispersion: leftDispersion, right_dispersion: rightDispersion, soft_balance_strength: softBalanceStrength }} onRunChange={(next) => { setRun(next); void refresh(); }} onPreviewCandidate={setPreviewCandidateId} notify={addToast} />}
+      {run && <StyleExploreDeepExplorer run={run} positive={positive} negative={negative} params={{ ...params, vibes }} algorithm={currentAlgorithm()} onRunChange={(next) => { setRun(next); void refresh(); }} onPreviewCandidate={setPreviewCandidateId} notify={addToast} />}
   </div>{formalReviewing && run && createPortal(<div className="fixed inset-x-0 bottom-0 top-[52px] z-[9000] bg-[var(--bg)]"><ReviewMode key={`${run.id}-${formalReviewCandidates.map((candidate) => candidate.id).join("-")}`} items={formalReviewCandidates.map((candidate) => { const current = locallyPatchedCandidates.current.get(candidate.id) ?? candidate; return { path: current.id, name: String(current.generation.name ?? current.id), hearted: !!current.review.heart, annotation: current.review.preliminary_label ? String(current.review.preliminary_label) : undefined }; })} categoryLabel={`${run.name} · 基础探索`} choices={EXPLORE_REVIEW_CHOICES} imageUrl={(item) => api.styleExploreCandidateImageUrl(run.id, item.path)} applyReview={applyFormalReviews} recycleReject={false} onFinished={(result) => { setFormalReviewing(false); addToast(`${result.message}；未筛选图片可下次继续`, result.ok ? "ok" : "err"); }} onCancel={() => setFormalReviewing(false)} /></div>, document.body)}<Modal open={helpEntry !== null} onClose={() => setHelpEntry(null)} title={helpEntry?.title ?? "参数说明"}>
     <div className="space-y-4 text-sm leading-7 text-[var(--muted)]">{helpEntry?.description}<p>输入框可精确填写，滑块会始终显示该参数允许的范围；右侧的回转箭头可单独恢复默认值。</p></div>
   </Modal><Modal open={poolImportResult !== null} onClose={() => setPoolImportResult(null)} title="ArtistPool 导入结果" wide>
@@ -559,10 +571,11 @@ export function StyleExplore() {
     <div className="mt-4 flex justify-end gap-2"><button className={ghostButtonClass} onClick={() => setCardDialog(null)}>取消</button><button className={buttonClass} onClick={submitCardDialog} disabled={busy || !cardDialog?.name.trim()}>确认创建</button></div>
   </Modal><Modal open={createRunDialogOpen} onClose={() => setCreateRunDialogOpen(false)} title="确认创建基础探索任务" wide>
     <p className="text-sm text-[var(--muted)]">创建后会固化下列提示词、生图参数与权重参数；之后的页面修改不会影响这一轮候选。</p>
+    <div className="mt-3 rounded-xl border border-[var(--border)] p-3 text-sm"><div className="font-medium">固定画师与搭配模式</div><code className="mt-2 block break-all text-xs">{pairing.fixed_artists.length ? pairing.fixed_artists.map((artist) => `${artist.weight.toFixed(1)}::${artist.id.trim()} ::`).join(", ") : "未设置固定画师"}</code><p className="mt-2 text-xs text-[var(--muted)]">{sequential ? `逐个搭配：${availablePartnerCount} 位 × ${pairing.samples_per_artist} 张 = ${effectiveTargetCount} 张` : `随机搭配：共 ${targetCount} 张，每张 ${minArtistCount}–${maxArtistCount} 位搭配画师`}{pairing.seed_mode === "fixed" ? " · 本轮使用相同种子" : " · 种子逐张变化"}</p></div>
     <div className="mt-4 grid gap-3 sm:grid-cols-2"><div className="rounded-xl border border-[var(--border)] p-3 text-sm"><div className="text-xs text-[var(--muted)]">任务名称</div><div className="mt-1 break-all">{taskName.trim() || `${pool?.name ?? "ArtistPool"} 探索`}</div></div><div className="rounded-xl border border-[var(--border)] p-3 text-sm"><div className="text-xs text-[var(--muted)]">ArtistPool</div><div className="mt-1 break-all">{pool ? `${pool.name} · ${pool.count} 个 ID` : "尚未选择 ArtistPool"}</div></div></div>
     <div className="mt-3 grid gap-3 lg:grid-cols-2"><div className="rounded-xl border border-[var(--border)] p-3"><div className="text-xs text-[var(--muted)]">正面提示词</div><code className="mt-1 block max-h-24 overflow-y-auto break-all text-xs">{positive || "（无）"}</code></div><div className="rounded-xl border border-[var(--border)] p-3"><div className="text-xs text-[var(--muted)]">负面提示词</div><code className="mt-1 block max-h-24 overflow-y-auto break-all text-xs">{negative || "（无）"}</code></div></div>
     <div className="mt-3 rounded-xl border border-[var(--border)] p-3"><div className="text-sm font-medium">生图参数</div><div className="mt-2 grid gap-x-4 gap-y-1 text-xs sm:grid-cols-2 lg:grid-cols-3">{Object.entries(params).map(([key, value]) => <div key={key} className="flex justify-between gap-3 border-b border-[var(--border)]/60 py-1"><span className="text-[var(--muted)]">{key}</span><span className="break-all text-right">{String(value)}</span></div>)}<div className="flex justify-between gap-3 border-b border-[var(--border)]/60 py-1"><span className="text-[var(--muted)]">vibes</span><span>{vibes.length} 个</span></div></div></div>
-        <div className="mt-3 rounded-xl border border-[var(--border)] p-3"><div className="text-sm font-medium">权重参数</div><div className="mt-2 grid gap-x-4 gap-y-1 text-xs sm:grid-cols-2 lg:grid-cols-3">{[["目标图片数", targetCount], ["最少抽取 ID 数目", minArtistCount], ["最多抽取 ID 数目", maxArtistCount], ["权重下界", lower], ["权重上界", upper], ["众数", mode], ["左侧离散", leftDispersion], ["右侧离散", rightDispersion], ["软平衡强度", softBalanceStrength]].map(([label, value]) => <div key={String(label)} className="flex justify-between gap-3 border-b border-[var(--border)]/60 py-1"><span className="text-[var(--muted)]">{label}</span><span>{value}</span></div>)}</div></div>
+        <div className="mt-3 rounded-xl border border-[var(--border)] p-3"><div className="text-sm font-medium">搭配画师权重参数（固定权重保持不变）</div><div className="mt-2 grid gap-x-4 gap-y-1 text-xs sm:grid-cols-2 lg:grid-cols-3">{[["目标图片数", effectiveTargetCount], ["最少搭配画师数", sequential ? 1 : minArtistCount], ["最多搭配画师数", sequential ? 1 : maxArtistCount], ["权重下界", lower], ["权重上界", upper], ["众数", mode], ["左侧离散", leftDispersion], ["右侧离散", rightDispersion], ["软平衡强度", softBalanceStrength]].map(([label, value]) => <div key={String(label)} className="flex justify-between gap-3 border-b border-[var(--border)]/60 py-1"><span className="text-[var(--muted)]">{label}</span><span>{value}</span></div>)}</div></div>
     <div className="mt-5 flex justify-end gap-2"><button className={ghostButtonClass} onClick={() => setCreateRunDialogOpen(false)}>取消</button><button className={buttonClass} onClick={createRun} disabled={busy || !poolId}><WandSparkles size={15} />确认创建任务</button></div>
   </Modal><ConfirmDialog open={confirmState !== null} title={confirmState?.title ?? "确认操作"} message={confirmState?.message ?? ""} danger={confirmState?.danger} onCancel={() => setConfirmState(null)} onConfirm={() => { const action = confirmState?.onConfirm; setConfirmState(null); action?.(); }} /></>;
 }

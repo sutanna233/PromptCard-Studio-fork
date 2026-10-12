@@ -493,7 +493,7 @@ def _local_mutation(
 def _random_injection(
     pool: Sequence[str], config: WeightSamplingConfig, rng: random.Random, max_artist_count: int
 ) -> DeepCandidate:
-    basic = generate_basic_candidate(pool, min(2, len(pool)), config, rng, max_artist_count)
+    basic = generate_basic_candidate(pool, min(2, len(pool), max_artist_count), config, rng, max_artist_count)
     return DeepCandidate(
         basic.artist_weights,
         basic.artist_string,
