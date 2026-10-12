@@ -3,6 +3,17 @@
 __pycache__/
 *.pyc
 frontend/node_modules/
+node_modules/
+runtime/
+/dist/
+build/
+.logs/
+*.log
+.env
+.env.*
+.idea/
+.vscode/
+*.anlas-balance-*-backup-*
 
 # 用户数据（不提交仓库）
 promptcards/

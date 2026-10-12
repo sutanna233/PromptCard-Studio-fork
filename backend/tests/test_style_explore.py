@@ -522,6 +522,67 @@ class StyleExploreServiceTest(unittest.TestCase):
         explore.delete_run(run["id"])
         self.assertFalse(original.parent.parent.exists())
 
+    def test_fixed_sequential_round_sends_full_prompt_and_exports_complete_card(self):
+        pool = explore.create_pool("固定搭配", "lk149\na\nb\n")
+        options = {"fixed_artists": [{"id": "lk149", "weight": 0.8}], "pairing_mode": "sequential", "samples_per_artist": 2, "seed_mode": "fixed", "random_seed": 5}
+        run = explore.create_run(pool["id"], 1, "portrait", "negative", {"seed": 0}, options)
+        self.assertEqual(run["target_count"], 4)
+        captured = []
+        old_fake = explore.novelai_service.generate_text2image
+
+        def capture(prompt, negative, params, output_dir=None):
+            captured.append((prompt, dict(params)))
+            return old_fake(prompt, negative, params, output_dir)
+
+        self.generate_gate.set()
+        with mock.patch.object(explore.novelai_service, "generate_text2image", side_effect=capture):
+            explore.start_run(run["id"])
+            for _ in range(100):
+                current = explore.get_run(run["id"])
+                if current["status"] == "generated":
+                    break
+                time.sleep(0.02)
+        self.assertEqual(current["status"], "generated")
+        self.assertEqual(len(captured), 4)
+        self.assertEqual([entry[1]["seed"] for entry in captured], [0, 0, 0, 0])
+        for (prompt, _params), candidate in zip(captured, current["candidates"]):
+            self.assertEqual(prompt, "portrait, " + candidate["artist_string"])
+            self.assertEqual(prompt.count("lk149"), 1)
+        self.assertEqual([item["ids"][1]["id"] for item in current["candidates"]], ["a", "a", "b", "b"])
+        first = current["candidates"][0]
+        explore.create_candidate_card(run["id"], first["id"], "固定搭配卡")
+        self.assertEqual(explore.cards_service.get_card("画师串", "固定搭配卡")["content"], first["artist_string"])
+        self.assertIn("0.8::lk149 ::", first["artist_string"])
+
+    def test_appending_round_changes_fixed_weight_only_in_new_snapshot(self):
+        pool = explore.create_pool("快照", "lk149\na\nb\n")
+        options = {"min_artist_count": 1, "max_artist_count": 1, "fixed_artists": [{"id": "lk149", "weight": 0.8}], "seed_mode": "fixed"}
+        run = explore.create_run(pool["id"], 2, "base", "neg", algorithm=options)
+        first = explore.append_basic_round(run["id"], 2, "base", "neg", {"seed": 7}, options)
+        old_candidates = first["candidates"]
+        changed = {**options, "fixed_artists": [{"id": "lk149", "weight": 1.2}]}
+        second = explore.append_basic_round(run["id"], 2, "next", "neg", {"seed": 19}, changed)
+        self.assertEqual(second["candidates"][:2], old_candidates)
+        self.assertTrue(all(item["ids"][0]["weight"] == 1.2 for item in second["candidates"][2:]))
+        self.assertEqual(second["candidates"][0]["algorithm_snapshot"]["comparison_seed"], 7)
+        self.assertEqual(second["candidates"][2]["algorithm_snapshot"]["comparison_seed"], 19)
+
+    def test_deep_service_preserves_fixed_artist_outside_partner_weight_bounds(self):
+        pool = explore.create_pool("深度固定", "lk149\na\nb\nc\n")
+        options = {"min_artist_count": 1, "max_artist_count": 2, "lower": 0.2, "upper": 0.6, "mode": 0.4, "fixed_artists": [{"id": "lk149", "weight": 1.5}]}
+        run = explore.create_run(pool["id"], 2, "base", "neg", algorithm=options)
+        explore.set_deep_parent_set(run["id"], custom_artist_strings=["1.5::lk149 ::, 0.4::a ::", "1.5::lk149 ::, 0.4::b ::"])
+        result = explore.append_deep_round(run["id"], 8, "base", "neg", algorithm={"random_seed": 8})
+        self.assertEqual(len(result["candidates"]), 8)
+        self.assertTrue(all(candidate["ids"][0] == {"id": "lk149", "weight": 1.5} for candidate in result["candidates"]))
+
+    def test_invalid_random_configuration_does_not_occupy_generation_channel(self):
+        pool = explore.create_pool("错误参数", "a\n")
+        run = explore.create_run(pool["id"], 2, "base", "neg", algorithm={"min_artist_count": 2})
+        with self.assertRaises(ValueError):
+            explore.start_run(run["id"])
+        self.assertFalse(coordinator.status()["occupied"])
+
     def test_create_candidate_card_copies_demo_image_to_normal_library(self):
         pool = explore.create_pool("池", "a\n")
         run = explore.create_run(pool["id"], 1, "base", "neg", algorithm={"artist_count": 1})
