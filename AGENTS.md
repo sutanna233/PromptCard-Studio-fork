@@ -11,3 +11,5 @@
 - 上游跟踪 frontend/dist，构建产物必须随前端源码更新提交，使源码包无需 Node.js 也能启动；不要忽略该目录的新资源。
 - 新搭配设置保存在各轮 algorithm/algorithm_snapshot；逐个模式完整覆盖池，固定项不计入搭配数量。最多搭配数可设 1，固定项与搭配项共不超过 30。
 - 同种子比较选项固化每轮 comparison_seed，包括 seed=0；旧任务继续沿用原有逐张递增或随机行为。
+- 2026-10-12 验证：71 项画风探索 unittest、2 项生成协调器 unittest及前端构建通过；浏览器完成固定 lk149、逐个搭配、相同种子、任务创建及追加轮次，未发起付费生成。
+- 用户实际使用的 `J:\ai\PromptCard-Studio` 已更新后端与前端到此功能，地址仍为 `http://127.0.0.1:14419`；旧程序文件备份在 `J:\ai\_downloads\PromptCard-Studio\before-fixed-artists-20261012`，用户 config/workspace 文件校验未变化。
